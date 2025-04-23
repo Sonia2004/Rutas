@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimización de Ruta</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Optimización de Ruta con Pedidos</h1>
+
+        <form id="parametros-form">
+            <label for="origen">Ubicación Actual:</label>
+            <select id="origen" required>
+                {% for lugar in coordenadas %}
+                <option value="{{ lugar }}">{{ lugar }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="almacen">Seleccionar Almacén:</label>
+            <select id="almacen" required>
+                {% for almacen in almacenes %}
+                <option value="{{ almacen }}">{{ almacen }}</option>
+                {% endfor %}
+            </select>
+
+            <label>Destinos (Selecciona uno o varios):</label>
+            <div id="destinos">
+                {% for lugar in coordenadas %}
+                <input type="checkbox" id="{{ lugar }}" name="destinos" value="{{ lugar }}" onchange="activarPedido('{{ lugar }}')">
+                <label for="{{ lugar }}">{{ lugar }}</label>
+                <input type="number" id="pedido_{{ lugar }}" name="pedido_{{ lugar }}" min="1" placeholder="Pedidos" style="display:none;">
+                <br>
+                {% endfor %}
+            </div>
+
+            <button type="submit">Calcular Ruta</button>
+        </form>
+
+        <table id="tabla-rutas">
+            <thead>
+                <tr>
+                    <th>Ruta completa</th>
+                    <th>Distancia (km)</th>
+                    <th>Tiempo (h)</th>
+                    <th>Pedidos por destino</th>
+                </tr>
+            </thead>
+            <tbody id="tabla-body">
+                <tr>
+                    <td colspan="4">Seleccione origen, almacén, destinos y pedidos, luego presione "Calcular Ruta"</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function activarPedido(destino) {
+            let checkbox = document.getElementById(destino);
+            let input = document.getElementById("pedido_" + destino);
+            input.style.display = checkbox.checked ? "inline-block" : "none";
+        }
+
+        document.getElementById("parametros-form").addEventListener("submit", function(event) {
+            event.preventDefault();
+
+            let origen = document.getElementById("origen").value;
+            let almacen = document.getElementById("almacen").value;
+            let destinos = [];
+            let pedidos = {};
+
+            document.querySelectorAll("input[name='destinos']:checked").forEach(function(checkbox) {
+                destinos.push(checkbox.value);
+                let cantidad_pedidos = document.getElementById("pedido_" + checkbox.value).value;
+                pedidos[checkbox.value] = parseInt(cantidad_pedidos) || 0;
+            });
+
+            fetch("/ruta", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ origen: origen, almacen: almacen, destinos: destinos, pedidos: pedidos })
+            })
+            .then(response => response.json())
+            .then(data => {
+                let tbody = document.getElementById("tabla-body");
+                tbody.innerHTML = "";
+
+                if (data.error) {
+                    tbody.innerHTML = `<tr><td colspan="4">${data.error}</td></tr>`;
+                } else {
+                    let pedidosTexto = Object.entries(data.pedidos)
+                        .map(([destino, cantidad]) => `${destino}: ${cantidad}`)
+                        .join(", ");
+
+                    let row = `<tr>
+                        <td>${data.ruta.join(' ➝ ')}</td>
+                        <td>${data.distancia}</td>
+                        <td>${data.tiempo}</td>
+                        <td>${pedidosTexto}</td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
+
